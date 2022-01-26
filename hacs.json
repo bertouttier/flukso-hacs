@@ -1,0 +1,4 @@
+{
+  "name": "flukso",
+  "domains": ["binary_sensor", "sensor"]
+}

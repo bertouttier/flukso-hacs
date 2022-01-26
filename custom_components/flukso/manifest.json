@@ -1,0 +1,12 @@
+{
+  "domain": "flukso",
+  "name": "Flukso",
+  "version": "1.0.0",
+  "config_flow": true,
+  "documentation": "https://github.com/bertouttier/flukso-hacs",
+  "issue_tracker": "https://github.com/bertouttier/flukso-hacs/issues",
+  "dependencies": ["mqtt"],
+  "mqtt": ["/device/+/config/+"],
+  "codeowners": ["@bertouttier", "@icarus75"],
+  "iot_class": "local_push"
+}

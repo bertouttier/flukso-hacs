@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Flukso",
+        "description": "Vul je Flukso hash in.",
+        "data": {
+          "device_hash": "Hash"
+        }
+      }
+    },
+    "abort": {
+      "invalid_discovery_info": "Ongeldige info"
+    }
+  }
+}
