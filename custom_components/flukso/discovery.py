@@ -286,7 +286,11 @@ def _get_binary_sensor_entities(entry_data, device_info):
                         OFF
                     {% endif %}"""
 
-        entities.append(MQTT_BINARY_SENSOR_PLATFORM_SCHEMA(sensorconfig))
+        try:
+            entities.append(MQTT_BINARY_SENSOR_PLATFORM_SCHEMA(sensorconfig))
+        except:
+            _LOGGER.error(f'Could not convert config to to MQTT binary sensor config for id  {sensor["id"]}')
+            _LOGGER.debug(sensorconfig)
 
     return entities
 
@@ -345,7 +349,11 @@ def _get_sensor_entities(entry_data, device_info):
             s = sensor.copy()
             s["data_type"] = dt
             config = _get_sensor_config(s, entry_data, device_info)
-            entities.append(MQTT_SENSOR_PLATFORM_SCHEMA(config))
+            try:
+                entities.append(MQTT_SENSOR_PLATFORM_SCHEMA(config))
+            except:
+                _LOGGER.error(f'Could not convert config to to MQTT sensor config for id  {s["id"]}')
+                _LOGGER.debug(config)
 
     return entities
 
