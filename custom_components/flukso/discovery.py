@@ -365,7 +365,10 @@ def _get_sensor_config(sensor, entry_data, device_info):
         sensor["data_type"],
     )
     sensorconfig[CONF_UNIQUE_ID] = "_".join(discovery_hash)
-    device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP)
+    if "subtype" in sensor:
+        device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM03)
+    else:
+        device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM02)
     if device_class:
         sensorconfig[CONF_DEVICE_CLASS] = device_class
     icon = _get_sensor_detail(sensor, ICON_MAP)
@@ -403,9 +406,9 @@ def _get_sensor_entities(entry_data, device_info):
             continue
 
         if "subtype" in sensor:
-            dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM03):
+            dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM03)
         else:
-            dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM02):
+            dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM02)
 
         for dt in dts:
             s = sensor.copy()
