@@ -45,4 +45,4 @@ After setting up the MQTT bridge between your Home Assistant broker and your Flu
 
 First, you need to figure out your device (NOT sensor) hash value. Every Flukso device has 1 unique device hash. For this, you need to connect an MQTT client to your Home assistant MQTT broker (e.g. [MQTT explorer](http://mqtt-explorer.com)) and subscribe to topic `/device/#`. You will see MQTT topics in the form of `/device/<device hash>/config/<something>`. This is your device hash.
 
-Use this value when setting up the [Flukso integration in your Home Assistant instance](https://my.home-assistant.io/redirect/config_flow_start/?domain=flukso). The integration will then automatically discover and add all your sensors to Home Assistant.
+Use this value when setting up the [Flukso integration in your Home Assistant instance](https://my.home-assistant.io/redirect/config_flow_start/?domain=flukso). The integration will then automatically discover and add all the sensors of this Flukso device to Home Assistant.

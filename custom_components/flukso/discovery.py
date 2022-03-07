@@ -476,7 +476,7 @@ async def async_discover_device(hass, entry):
 
         tap_future.set_result(True)
 
-    sub_state = await subscription.async_subscribe_topics(
+    sub_state = subscription.async_prepare_subscribe_topics(
         hass,
         sub_state,
         {
@@ -491,6 +491,11 @@ async def async_discover_device(hass, entry):
         },
     )
 
+    await subscription.async_subscribe_topics(
+        hass,
+        sub_state
+    )
+
     _, pending = await asyncio.wait(config_futures.values(), timeout=2)
     if len(pending) == 1 and config_futures["kube"] == pending[0]:
         _LOGGER.debug("kube config pending, FLM02?")
@@ -500,4 +505,4 @@ async def async_discover_device(hass, entry):
         _LOGGER.debug("test tap pending, FLM02?")
 
     _LOGGER.debug("all configs and tap received")
-    await subscription.async_unsubscribe_topics(hass, sub_state)
+    subscription.async_unsubscribe_topics(hass, sub_state)
