@@ -4,7 +4,6 @@ import json
 import logging
 import re
 
-from homeassistant.components.binary_sensor import DEVICE_CLASS_PROBLEM
 from homeassistant.components.mqtt import CONF_QOS, CONF_STATE_TOPIC, subscription
 from homeassistant.components.mqtt.binary_sensor import (
     CONF_OFF_DELAY,
@@ -21,9 +20,10 @@ from homeassistant.components.mqtt.sensor import (
     CONF_STATE_CLASS,
     PLATFORM_SCHEMA as MQTT_SENSOR_PLATFORM_SCHEMA,
 )
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import (
-    STATE_CLASS_MEASUREMENT,
-    STATE_CLASS_TOTAL_INCREASING,
+    SensorStateClass,
+    SensorDeviceClass
 )
 from homeassistant.const import (
     CONF_DEVICE,
@@ -35,16 +35,6 @@ from homeassistant.const import (
     CONF_UNIQUE_ID,
     CONF_UNIT_OF_MEASUREMENT,
     CONF_VALUE_TEMPLATE,
-    DEVICE_CLASS_BATTERY,
-    DEVICE_CLASS_CURRENT,
-    DEVICE_CLASS_ENERGY,
-    DEVICE_CLASS_GAS,
-    DEVICE_CLASS_HUMIDITY,
-    DEVICE_CLASS_ILLUMINANCE,
-    DEVICE_CLASS_POWER,
-    DEVICE_CLASS_PRESSURE,
-    DEVICE_CLASS_TEMPERATURE,
-    DEVICE_CLASS_VOLTAGE,
     ELECTRIC_CURRENT_AMPERE,
     ELECTRIC_POTENTIAL_VOLT,
     ENERGY_WATT_HOUR,
@@ -164,34 +154,34 @@ UNIT_OF_MEASUREMENT_MAP_FLM02 = {
 DEVICE_CLASS_MAP_FLM03 = {
     "electricity": {
         "gauge": {
-            "pplus": DEVICE_CLASS_POWER,
-            "pminus": DEVICE_CLASS_POWER,
-            "vrms": DEVICE_CLASS_VOLTAGE,
-            "irms": DEVICE_CLASS_CURRENT,
+            "pplus": SensorDeviceClass.POWER,
+            "pminus": SensorDeviceClass.POWER,
+            "vrms": SensorDeviceClass.VOLTAGE,
+            "irms": SensorDeviceClass.CURRENT,
         },
-        "counter": {"pplus": DEVICE_CLASS_ENERGY, "pminus": DEVICE_CLASS_ENERGY},
+        "counter": {"pplus": SensorDeviceClass.ENERGY, "pminus": SensorDeviceClass.ENERGY},
     },
-    "temperature": DEVICE_CLASS_TEMPERATURE,
-    "pressure": DEVICE_CLASS_PRESSURE,
-    "battery": DEVICE_CLASS_BATTERY,
-    "light": DEVICE_CLASS_ILLUMINANCE,
-    "humidity": DEVICE_CLASS_HUMIDITY,
-    "gas": DEVICE_CLASS_GAS,
-    "error": DEVICE_CLASS_PROBLEM,
+    "temperature": SensorDeviceClass.TEMPERATURE,
+    "pressure": SensorDeviceClass.PRESSURE,
+    "battery": SensorDeviceClass.BATTERY,
+    "light": SensorDeviceClass.ILLUMINANCE,
+    "humidity": SensorDeviceClass.HUMIDITY,
+    "gas": SensorDeviceClass.GAS,
+    "error": BinarySensorDeviceClass.PROBLEM,
 }
 
 DEVICE_CLASS_MAP_FLM02 = {
     "electricity": {
-        "gauge": DEVICE_CLASS_POWER,
-        "counter": DEVICE_CLASS_ENERGY,
+        "gauge": SensorDeviceClass.POWER,
+        "counter": SensorDeviceClass.ENERGY,
     },
-    "temperature": DEVICE_CLASS_TEMPERATURE,
-    "pressure": DEVICE_CLASS_PRESSURE,
-    "battery": DEVICE_CLASS_BATTERY,
-    "light": DEVICE_CLASS_ILLUMINANCE,
-    "humidity": DEVICE_CLASS_HUMIDITY,
-    "gas": DEVICE_CLASS_GAS,
-    "error": DEVICE_CLASS_PROBLEM,
+    "temperature": SensorDeviceClass.TEMPERATURE,
+    "pressure": SensorDeviceClass.PRESSURE,
+    "battery": SensorDeviceClass.BATTERY,
+    "light": SensorDeviceClass.ILLUMINANCE,
+    "humidity": SensorDeviceClass.HUMIDITY,
+    "gas": SensorDeviceClass.GAS,
+    "error": BinarySensorDeviceClass.PROBLEM,
 }
 
 ICON_MAP = {
@@ -203,23 +193,23 @@ ICON_MAP = {
 
 STATE_CLASS_MAP = {
     "electricity": {
-        "counter": STATE_CLASS_TOTAL_INCREASING,
-        "gauge": STATE_CLASS_MEASUREMENT,
+        "counter": SensorStateClass.TOTAL_INCREASING,
+        "gauge": SensorStateClass.MEASUREMENT,
     },
     "water": {
-        "counter": STATE_CLASS_TOTAL_INCREASING,
-        "gauge": STATE_CLASS_MEASUREMENT,
+        "counter": SensorStateClass.TOTAL_INCREASING,
+        "gauge": SensorStateClass.MEASUREMENT,
     },
-    "gas": {"counter": STATE_CLASS_TOTAL_INCREASING, "gauge": STATE_CLASS_MEASUREMENT},
-    "temperature": STATE_CLASS_MEASUREMENT,
-    "pressure": STATE_CLASS_MEASUREMENT,
-    "battery": STATE_CLASS_MEASUREMENT,
-    "light": STATE_CLASS_MEASUREMENT,
-    "humidity": STATE_CLASS_MEASUREMENT,
-    "error": STATE_CLASS_MEASUREMENT,
-    "proximity": STATE_CLASS_MEASUREMENT,
-    "movement": STATE_CLASS_MEASUREMENT,
-    "vibration": STATE_CLASS_MEASUREMENT,
+    "gas": {"counter": SensorStateClass.TOTAL_INCREASING, "gauge": SensorStateClass.MEASUREMENT},
+    "temperature": SensorStateClass.MEASUREMENT,
+    "pressure": SensorStateClass.MEASUREMENT,
+    "battery": SensorStateClass.MEASUREMENT,
+    "light": SensorStateClass.MEASUREMENT,
+    "humidity": SensorStateClass.MEASUREMENT,
+    "error": SensorStateClass.MEASUREMENT,
+    "proximity": SensorStateClass.MEASUREMENT,
+    "movement": SensorStateClass.MEASUREMENT,
+    "vibration": SensorStateClass.MEASUREMENT,
 }
 
 
@@ -320,7 +310,7 @@ def _get_binary_sensor_entities(entry_data, device_info):
             uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM02)
         if uom:
             sensorconfig[CONF_UNIT_OF_MEASUREMENT] = uom
-        if device_class and (device_class == DEVICE_CLASS_PROBLEM):
+        if device_class and (device_class == BinarySensorDeviceClass.PROBLEM):
             sensorconfig[
                 CONF_VALUE_TEMPLATE
             ] = """
