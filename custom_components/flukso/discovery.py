@@ -376,11 +376,15 @@ def _get_sensor_config(sensor, entry_data, device_info):
         if sensor["type"] == "temperature":
             sensorconfig[
                 CONF_VALUE_TEMPLATE
-            ] = """{{ value.split(",")[1] | round(1) }}"""
+            ] = """{{ value.split(",")[1] | float | round(1) }}"""
         elif sensor["type"] == "battery":
             sensorconfig[
                 CONF_VALUE_TEMPLATE
-            ] = """{{ (((value.split(",")[1]|round(1)) / 3.3) * 100) | round(2) }}"""
+            ] = """{{ (((value.split(",")[1] | float) / 3.3) * 100) | round(2) }}"""
+        elif sensor["type"] == "gas":
+            sensorconfig[
+                CONF_VALUE_TEMPLATE
+            ] = """{{ ((value.split(",")[1] | float) / 1000) }}"""
 
     return sensorconfig
 
