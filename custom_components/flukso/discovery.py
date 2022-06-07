@@ -491,7 +491,7 @@ async def async_discover_device(hass, entry):
     )
 
     _, pending = await asyncio.wait(config_futures.values(), timeout=2)
-    if len(pending) == 1 and config_futures["kube"] == pending[0]:
+    if len(pending) == 1 and config_futures["kube"] in pending:
         _LOGGER.debug("kube config pending, FLM02?")
 
     _, pending = await asyncio.wait([tap_future], timeout=2)
