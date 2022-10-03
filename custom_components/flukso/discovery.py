@@ -4,57 +4,36 @@ import json
 import logging
 import re
 
-from homeassistant.components.mqtt import CONF_QOS, CONF_STATE_TOPIC, subscription
-from homeassistant.components.mqtt.binary_sensor import (
-    CONF_OFF_DELAY,
-    PLATFORM_SCHEMA as MQTT_BINARY_SENSOR_PLATFORM_SCHEMA,
-)
-from homeassistant.components.mqtt.mixins import (
-    CONF_CONNECTIONS,
-    CONF_ENABLED_BY_DEFAULT,
-    CONF_IDENTIFIERS,
-    CONF_MANUFACTURER,
-    CONF_SW_VERSION,
-)
-from homeassistant.components.mqtt.sensor import (
-    CONF_STATE_CLASS,
-    PLATFORM_SCHEMA as MQTT_SENSOR_PLATFORM_SCHEMA,
-)
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.components.sensor import (
-    SensorStateClass,
-    SensorDeviceClass
-)
-from homeassistant.const import (
-    CONF_DEVICE,
-    CONF_DEVICE_CLASS,
-    CONF_FORCE_UPDATE,
-    CONF_ICON,
-    CONF_NAME,
-    CONF_PLATFORM,
-    CONF_UNIQUE_ID,
-    CONF_UNIT_OF_MEASUREMENT,
-    CONF_VALUE_TEMPLATE,
-    ELECTRIC_CURRENT_AMPERE,
-    ELECTRIC_POTENTIAL_VOLT,
-    ENERGY_WATT_HOUR,
-    LIGHT_LUX,
-    PERCENTAGE,
-    POWER_WATT,
-    PRESSURE_HPA,
-    TEMP_CELSIUS,
-    VOLUME_CUBIC_METERS,
-    VOLUME_LITERS,
-)
+from homeassistant.components.mqtt import (CONF_QOS, CONF_STATE_TOPIC,
+                                           subscription)
+from homeassistant.components.mqtt.binary_sensor import CONF_OFF_DELAY
+from homeassistant.components.mqtt.binary_sensor import \
+    PLATFORM_SCHEMA_MODERN as MQTT_BINARY_SENSOR_PLATFORM_SCHEMA
+from homeassistant.components.mqtt.mixins import (CONF_CONNECTIONS,
+                                                  CONF_ENABLED_BY_DEFAULT,
+                                                  CONF_IDENTIFIERS,
+                                                  CONF_MANUFACTURER,
+                                                  CONF_OBJECT_ID,
+                                                  CONF_SW_VERSION)
+from homeassistant.components.mqtt.sensor import CONF_STATE_CLASS
+from homeassistant.components.mqtt.sensor import \
+    PLATFORM_SCHEMA_MODERN as MQTT_SENSOR_PLATFORM_SCHEMA
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
+                                 CONF_ENTITY_CATEGORY, CONF_FORCE_UPDATE,
+                                 CONF_ICON, CONF_NAME, CONF_UNIQUE_ID,
+                                 CONF_UNIT_OF_MEASUREMENT, CONF_VALUE_TEMPLATE,
+                                 ELECTRIC_CURRENT_AMPERE,
+                                 ELECTRIC_POTENTIAL_VOLT, ENERGY_WATT_HOUR,
+                                 LIGHT_LUX, PERCENTAGE, POWER_WATT,
+                                 PRESSURE_HPA, TEMP_CELSIUS,
+                                 VOLUME_CUBIC_METERS, VOLUME_LITERS, Platform)
 from homeassistant.core import callback
+from homeassistant.helpers.entity import EntityCategory
 
-from .const import (
-    CONF_DEVICE_FIRMWARE,
-    CONF_DEVICE_HASH,
-    CONF_DEVICE_SERIAL,
-    DEFAULT_TIMEOUT,
-    DOMAIN,
-)
+from .const import (CONF_DEVICE_FIRMWARE, CONF_DEVICE_HASH, CONF_DEVICE_SERIAL,
+                    DEFAULT_TIMEOUT, DOMAIN)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -230,6 +209,31 @@ def _get_sensor_name(sensor, entry_data):
     """Generate a name based on the kube and flx config, and the data type and sub type."""
     name = "unknown"
     if "class" in sensor and sensor["class"] == "kube":
+        name = "unknown kube"
+        if (
+            "kube" in entry_data
+            and "name" in entry_data["kube"][str(sensor["kid"])]
+            and entry_data["kube"][str(sensor["kid"])]["name"]
+        ):
+            name = entry_data["kube"][str(sensor["kid"])]["name"]
+    else:
+        "unknown sensor"
+        if "port" in sensor:
+            if "function" in sensor:
+                name = sensor["function"]
+            elif (
+                "flx" in entry_data
+                and "name" in entry_data["flx"][str(sensor["port"][0])]
+                and entry_data["flx"][str(sensor["port"][0])]["name"]
+            ):
+                name = entry_data["flx"][str(sensor["port"][0])]["name"]
+    return name
+
+
+def _get_sensor_object_id(sensor, entry_data):
+    """Generate a name based on the kube and flx config, and the data type and sub type."""
+    name = "unknown"
+    if "class" in sensor and sensor["class"] == "kube":
         if (
             "kube" in entry_data
             and "name" in entry_data["kube"][str(sensor["kid"])]
@@ -283,9 +287,10 @@ def _get_binary_sensor_entities(entry_data, device_info):
 
         sensorconfig = {}
         sensorconfig[CONF_NAME] = _get_sensor_name(sensor, entry_data)
+        sensorconfig[CONF_OBJECT_ID] = _get_sensor_object_id(sensor, entry_data)
         sensorconfig[CONF_DEVICE] = device_info
+        sensorconfig[CONF_ENTITY_CATEGORY] = EntityCategory.DIAGNOSTIC
         sensorconfig[CONF_ENABLED_BY_DEFAULT] = True
-        sensorconfig[CONF_PLATFORM] = "mqtt"
         sensorconfig[CONF_STATE_TOPIC] = f'/sensor/{sensor["id"]}/{sensor["data_type"]}'
         sensorconfig[CONF_QOS] = 0
         sensorconfig[CONF_FORCE_UPDATE] = False
@@ -342,9 +347,10 @@ def _get_binary_sensor_entities(entry_data, device_info):
 def _get_sensor_config(sensor, entry_data, device_info):
     sensorconfig = {}
     sensorconfig[CONF_NAME] = _get_sensor_name(sensor, entry_data)
+    sensorconfig[CONF_OBJECT_ID] = _get_sensor_object_id(sensor, entry_data)
     sensorconfig[CONF_DEVICE] = device_info
+    sensorconfig[CONF_ENTITY_CATEGORY] = EntityCategory.DIAGNOSTIC
     sensorconfig[CONF_ENABLED_BY_DEFAULT] = True
-    sensorconfig[CONF_PLATFORM] = "mqtt"
     sensorconfig[CONF_STATE_TOPIC] = f'/sensor/{sensor["id"]}/{sensor["data_type"]}'
     sensorconfig[CONF_STATE_CLASS] = _get_sensor_detail(sensor, STATE_CLASS_MAP)
     sensorconfig[CONF_QOS] = 0
@@ -433,9 +439,9 @@ def get_entities_for_platform(platform, entry_data):
     """Generate configuration for the given platform."""
     entities = []
     device_info = _get_device_info(entry_data)
-    if platform == "binary_sensor":
+    if platform == Platform.BINARY_SENSOR:
         entities.extend(_get_binary_sensor_entities(entry_data, device_info))
-    elif platform == "sensor":
+    elif platform == Platform.SENSOR:
         entities.extend(_get_sensor_entities(entry_data, device_info))
     return entities
 
