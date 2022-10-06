@@ -4,9 +4,12 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.const import Platform
 
-from .const import CONF_DEVICE_HASH, DOMAIN, PLATFORMS
+from .const import CONF_DEVICE_HASH, DOMAIN
 from .discovery import async_discover_device
+
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -21,12 +24,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if entry.data[CONF_DEVICE_HASH] == data[CONF_DEVICE_HASH]:
             return False
 
-    hass.data[DOMAIN][entry.entry_id] = {CONF_DEVICE_HASH: entry.data[CONF_DEVICE_HASH]}
+    hass.data[DOMAIN][entry.entry_id] = {
+        CONF_DEVICE_HASH: entry.data[CONF_DEVICE_HASH]
+    }
 
     await async_discover_device(hass, entry)
-
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
-
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
@@ -38,7 +41,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     device_registry = await hass.helpers.device_registry.async_get_registry()
     device = device_registry.async_get_device(
-        identifiers={(DOMAIN, entry.data[CONF_DEVICE_HASH])}
+        identifiers={
+            (DOMAIN, entry.data[CONF_DEVICE_HASH])
+        }
     )
 
     if device is not None:
