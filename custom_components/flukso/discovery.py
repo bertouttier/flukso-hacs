@@ -26,7 +26,8 @@ from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
                                  CONF_UNIT_OF_MEASUREMENT, CONF_VALUE_TEMPLATE,
                                  ELECTRIC_CURRENT_AMPERE,
                                  ELECTRIC_POTENTIAL_VOLT, ENERGY_WATT_HOUR,
-                                 LIGHT_LUX, PERCENTAGE, POWER_WATT,
+                                 LIGHT_LUX, PERCENTAGE,
+                                 POWER_VOLT_AMPERE_REACTIVE, POWER_WATT,
                                  PRESSURE_HPA, TEMP_CELSIUS,
                                  VOLUME_CUBIC_METERS, VOLUME_LITERS, Platform)
 from homeassistant.core import callback
@@ -89,10 +90,11 @@ DATA_TYPE_MAP_FLM02 = {
 UNIT_OF_MEASUREMENT_MAP_FLM03 = {
     "electricity": {
         "gauge": {
-            "q1": "VAR",
-            "q2": "VAR",
-            "q3": "VAR",
-            "q4": "VAR",
+            "pf": PERCENTAGE,
+            "q1": POWER_VOLT_AMPERE_REACTIVE,
+            "q2": POWER_VOLT_AMPERE_REACTIVE,
+            "q3": POWER_VOLT_AMPERE_REACTIVE,
+            "q4": POWER_VOLT_AMPERE_REACTIVE,
             "pplus": POWER_WATT,
             "pminus": POWER_WATT,
             "vrms": ELECTRIC_POTENTIAL_VOLT,
@@ -133,13 +135,22 @@ UNIT_OF_MEASUREMENT_MAP_FLM02 = {
 DEVICE_CLASS_MAP_FLM03 = {
     "electricity": {
         "gauge": {
+            "pf": SensorDeviceClass.POWER_FACTOR,
+            "q1": SensorDeviceClass.REACTIVE_POWER,
+            "q2": SensorDeviceClass.REACTIVE_POWER,
+            "q3": SensorDeviceClass.REACTIVE_POWER,
+            "q4": SensorDeviceClass.REACTIVE_POWER,
             "pplus": SensorDeviceClass.POWER,
             "pminus": SensorDeviceClass.POWER,
             "vrms": SensorDeviceClass.VOLTAGE,
             "irms": SensorDeviceClass.CURRENT,
         },
-        "counter": {"pplus": SensorDeviceClass.ENERGY, "pminus": SensorDeviceClass.ENERGY},
+        "counter": {
+            "pplus": SensorDeviceClass.ENERGY,
+            "pminus": SensorDeviceClass.ENERGY
+        },
     },
+    "water": SensorDeviceClass.WATER,
     "temperature": SensorDeviceClass.TEMPERATURE,
     "pressure": SensorDeviceClass.PRESSURE,
     "battery": SensorDeviceClass.BATTERY,
@@ -154,6 +165,7 @@ DEVICE_CLASS_MAP_FLM02 = {
         "gauge": SensorDeviceClass.POWER,
         "counter": SensorDeviceClass.ENERGY,
     },
+    "water": SensorDeviceClass.WATER,
     "temperature": SensorDeviceClass.TEMPERATURE,
     "pressure": SensorDeviceClass.PRESSURE,
     "battery": SensorDeviceClass.BATTERY,
@@ -179,7 +191,10 @@ STATE_CLASS_MAP = {
         "counter": SensorStateClass.TOTAL_INCREASING,
         "gauge": SensorStateClass.MEASUREMENT,
     },
-    "gas": {"counter": SensorStateClass.TOTAL_INCREASING, "gauge": SensorStateClass.MEASUREMENT},
+    "gas": {
+        "counter": SensorStateClass.TOTAL_INCREASING,
+        "gauge": SensorStateClass.MEASUREMENT
+    },
     "temperature": SensorStateClass.MEASUREMENT,
     "pressure": SensorStateClass.MEASUREMENT,
     "battery": SensorStateClass.MEASUREMENT,
