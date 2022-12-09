@@ -5,6 +5,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
+from homeassistant.helpers import device_registry as dr
 
 from .const import CONF_DEVICE_HASH, DOMAIN
 from .discovery import async_discover_device
@@ -39,14 +40,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
-    device_registry = await hass.helpers.device_registry.async_get_registry()
-    device = device_registry.async_get_device(
+    dev_registry = dr.async_get(hass)
+    device = dev_registry.async_get_device(
         identifiers={
             (DOMAIN, entry.data[CONF_DEVICE_HASH])
         }
     )
 
     if device is not None:
-        device_registry.async_remove_device(device.id)
+        dev_registry.async_remove_device(device.id)
 
     return unload_ok
