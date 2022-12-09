@@ -34,11 +34,18 @@ from homeassistant.core import callback
 from homeassistant.helpers.entity import EntityCategory
 
 from .const import (CONF_DEVICE_FIRMWARE, CONF_DEVICE_HASH, CONF_DEVICE_SERIAL,
-                    DEFAULT_TIMEOUT, DOMAIN)
+                    CONF_FLM03, DEFAULT_TIMEOUT, DOMAIN)
 
 _LOGGER = logging.getLogger(__name__)
 
-CONFIGS = ["kube", "flx", "sensor"]
+CONFTYPE_KUBE = "kube"
+CONFTYPE_FLX = "flx"
+CONFTYPE_SENSOR = "sensor"
+CONFTYPES = [
+    CONFTYPE_KUBE,
+    CONFTYPE_FLX,
+    CONFTYPE_SENSOR
+]
 
 DATA_TYPE_MAP_FLM03 = {
     "electricity": {
@@ -238,22 +245,22 @@ def _get_sensor_name(sensor, entry_data):
     if "class" in sensor and sensor["class"] == "kube":
         name = "unknown kube"
         if (
-            "kube" in entry_data
-            and "name" in entry_data["kube"][str(sensor["kid"])]
-            and entry_data["kube"][str(sensor["kid"])]["name"]
+            CONFTYPE_KUBE in entry_data
+            and "name" in entry_data[CONFTYPE_KUBE][str(sensor["kid"])]
+            and entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
         ):
-            name = entry_data["kube"][str(sensor["kid"])]["name"]
+            name = entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
     else:
         "unknown sensor"
         if "port" in sensor:
             if "function" in sensor:
                 name = sensor["function"]
             elif (
-                "flx" in entry_data
-                and "name" in entry_data["flx"][str(sensor["port"][0])]
-                and entry_data["flx"][str(sensor["port"][0])]["name"]
+                CONFTYPE_FLX in entry_data
+                and "name" in entry_data[CONFTYPE_FLX][str(sensor["port"][0])]
+                and entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
             ):
-                name = entry_data["flx"][str(sensor["port"][0])]["name"]
+                name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
     return name
 
 
@@ -262,21 +269,21 @@ def _get_sensor_object_id(sensor, entry_data):
     name = "unknown"
     if "class" in sensor and sensor["class"] == "kube":
         if (
-            "kube" in entry_data
-            and "name" in entry_data["kube"][str(sensor["kid"])]
-            and entry_data["kube"][str(sensor["kid"])]["name"]
+            CONFTYPE_KUBE in entry_data
+            and "name" in entry_data[CONFTYPE_KUBE][str(sensor["kid"])]
+            and entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
         ):
-            name = entry_data["kube"][str(sensor["kid"])]["name"]
+            name = entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
     else:
         if "port" in sensor:
             if "function" in sensor:
                 name = sensor["function"]
             elif (
-                "flx" in entry_data
-                and "name" in entry_data["flx"][str(sensor["port"][0])]
-                and entry_data["flx"][str(sensor["port"][0])]["name"]
+                CONFTYPE_FLX in entry_data
+                and "name" in entry_data[CONFTYPE_FLX][str(sensor["port"][0])]
+                and entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
             ):
-                name = entry_data["flx"][str(sensor["port"][0])]["name"]
+                name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
 
     if "type" in sensor:
         name = f'{name} {sensor["type"]}'
@@ -305,7 +312,7 @@ def _get_binary_sensor_entities(entry_data, device_info):
     """Generate binary sensor configuration."""
     entities = []
 
-    for sensor in entry_data["sensor"].values():
+    for sensor in entry_data[CONFTYPE_SENSOR].values():
         if "enable" not in sensor or sensor["enable"] == 0:
             continue
 
@@ -327,7 +334,7 @@ def _get_binary_sensor_entities(entry_data, device_info):
             sensor["data_type"],
         )
         sensorconfig[CONF_UNIQUE_ID] = "_".join(discovery_hash)
-        if "subtype" in sensor:
+        if entry_data[CONF_FLM03]:
             device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM03)
         else:
             device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM02)
@@ -336,7 +343,7 @@ def _get_binary_sensor_entities(entry_data, device_info):
         icon = _get_sensor_detail(sensor, ICON_MAP)
         if icon:
             sensorconfig[CONF_ICON] = icon
-        if "subtype" in sensor:
+        if entry_data[CONF_FLM03]:
             uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM03)
         else:
             uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM02)
@@ -388,7 +395,7 @@ def _get_sensor_config(sensor, entry_data, device_info):
         sensor["data_type"],
     )
     sensorconfig[CONF_UNIQUE_ID] = "_".join(discovery_hash)
-    if "subtype" in sensor:
+    if entry_data[CONF_FLM03]:
         device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM03)
     else:
         device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM02)
@@ -397,7 +404,7 @@ def _get_sensor_config(sensor, entry_data, device_info):
     icon = _get_sensor_detail(sensor, ICON_MAP)
     if icon:
         sensorconfig[CONF_ICON] = icon
-    if "subtype" in sensor:
+    if entry_data[CONF_FLM03]:
         uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM03)
     else:
         uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM02)
@@ -430,14 +437,14 @@ def _get_sensor_config(sensor, entry_data, device_info):
 def _get_sensor_entities(entry_data, device_info):
     entities = []
 
-    for sensor in entry_data["sensor"].values():
+    for sensor in entry_data[CONFTYPE_SENSOR].values():
         if "enable" not in sensor or sensor["enable"] == 0:
             continue
 
         if _is_binary_sensor(sensor):
             continue
 
-        if "subtype" in sensor:
+        if entry_data[CONF_FLM03]:
             dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM03)
         else:
             dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM02)
@@ -480,7 +487,7 @@ def get_entities_for_platform(platform, entry_data):
 
 async def async_discover_device(hass, entry):
     """Get the Flukso configs JSON's using MQTT."""
-    config_futures = {config: asyncio.Future() for config in CONFIGS}
+    config_futures = {conftype: asyncio.Future() for conftype in CONFTYPES}
     tap_future = asyncio.Future()
     sub_state = None
 
@@ -491,18 +498,20 @@ async def async_discover_device(hass, entry):
         device = splitted_topic[2]
         conftype = splitted_topic[4]
 
-        _LOGGER.debug("storing config type %s for device %s", conftype, device)
-        hass.data[DOMAIN][entry.entry_id][conftype] = json.loads(msg.payload)
-
         if conftype in config_futures:
+            _LOGGER.debug("storing config type %s for device %s", conftype, device)
+            hass.data[DOMAIN][entry.entry_id][conftype] = json.loads(msg.payload)
             config_futures[conftype].set_result(True)
+        else:
+            _LOGGER.warning("unexpected config type: %s", conftype)
 
     @callback
     def tap_message_received(msg):
+        _LOGGER.debug("TAP received:")
+        _LOGGER.debug(msg.payload)
         serial = re.findall("# serial: (.*)", msg.payload)[0]
         firmware = re.findall("# firmware: (.*)", msg.payload)[0]
 
-        _LOGGER.debug("Found device with serial %s and firmware %s", serial, firmware)
         hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_SERIAL] = serial
         hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_FIRMWARE] = firmware
 
@@ -528,13 +537,29 @@ async def async_discover_device(hass, entry):
         sub_state
     )
 
-    _, pending = await asyncio.wait(config_futures.values(), timeout=2)
-    if len(pending) == 1 and config_futures["kube"] in pending:
-        _LOGGER.debug("kube config pending, FLM02?")
+    done, _ = await asyncio.wait(config_futures.values(), timeout=2)
+    assert config_futures[CONFTYPE_SENSOR] in done
+    config_futures[CONFTYPE_SENSOR].result()
+    _LOGGER.debug(hass.data[DOMAIN][entry.entry_id][CONFTYPE_SENSOR])
 
-    _, pending = await asyncio.wait([tap_future], timeout=2)
-    if len(pending) == 1:
-        _LOGGER.debug("test tap pending, FLM02?")
+    if config_futures[CONFTYPE_KUBE] in done:
+        _LOGGER.debug(hass.data[DOMAIN][entry.entry_id][CONFTYPE_KUBE])
+    else:
+        _LOGGER.info("kube config not received")
 
-    _LOGGER.debug("all configs and tap received")
+    if config_futures[CONFTYPE_FLX] in done:
+        _LOGGER.debug(hass.data[DOMAIN][entry.entry_id][CONFTYPE_FLX])
+    else:
+        _LOGGER.info("flx config not received")
+
+    done, _ = await asyncio.wait([tap_future], timeout=2)
+    if tap_future in done:
+        sn = hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_SERIAL]
+        version = hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_FIRMWARE]
+        _LOGGER.info("We found an FLM03 with serial %s and version %s", sn, version)
+        hass.data[DOMAIN][entry.entry_id][CONF_FLM03] = True
+    else:
+        _LOGGER.info("No TAP information received, we found an FLM02")
+        hass.data[DOMAIN][entry.entry_id][CONF_FLM03] = False
+
     subscription.async_unsubscribe_topics(hass, sub_state)
