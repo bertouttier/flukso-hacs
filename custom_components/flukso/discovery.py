@@ -112,10 +112,16 @@ UNIT_OF_MEASUREMENT_MAP_FLM03 = {
     "temperature": TEMP_CELSIUS,
     "pressure": PRESSURE_HPA,
     "battery": PERCENTAGE,
-    "water": VOLUME_LITERS,
+    "water": {
+        "gauge": "L/s",
+        "counter": VOLUME_LITERS,
+    },
     "light": LIGHT_LUX,
     "humidity": PERCENTAGE,
-    "gas": VOLUME_CUBIC_METERS,
+    "gas":  {
+        "gauge": "m³/s",
+        "counter": VOLUME_CUBIC_METERS,
+    },
 }
 
 UNIT_OF_MEASUREMENT_MAP_FLM02 = {
@@ -126,10 +132,16 @@ UNIT_OF_MEASUREMENT_MAP_FLM02 = {
     "temperature": TEMP_CELSIUS,
     "pressure": PRESSURE_HPA,
     "battery": PERCENTAGE,
-    "water": VOLUME_LITERS,
+    "water": {
+        "gauge": "L/s",
+        "counter": VOLUME_LITERS,
+    },
     "light": LIGHT_LUX,
     "humidity": PERCENTAGE,
-    "gas": VOLUME_CUBIC_METERS,
+    "gas":  {
+        "gauge": "m³/s",
+        "counter": VOLUME_CUBIC_METERS,
+    },
 }
 
 DEVICE_CLASS_MAP_FLM03 = {
@@ -406,6 +418,11 @@ def _get_sensor_config(sensor, entry_data, device_info):
             sensorconfig[
                 CONF_VALUE_TEMPLATE
             ] = """{{ ((value.split(",")[1] | float) / 1000) }}"""
+        elif sensor["type"] == "electricity":
+            if "subtype" in sensor and sensor["subtype"] == "pf":
+                sensorconfig[
+                    CONF_VALUE_TEMPLATE
+                ] = """{{ ((value.split(",")[1] | float) * 100) | round(1) }}"""
 
     return sensorconfig
 
