@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
 
 from .const import CONF_DEVICE_HASH, DOMAIN
 
@@ -40,8 +41,27 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle a flow initialized by the user."""
         if user_input is not None:
             device_hash = user_input[CONF_DEVICE_HASH]
+            if len(device_hash) != 32:
+                return self.async_abort(reason="invalid_discovery_info")
             return await self._async_create_flukso(device_hash)
 
         fields = {}
         fields[vol.Required(CONF_DEVICE_HASH)] = str
         return self.async_show_form(step_id="user", data_schema=vol.Schema(fields))
+
+    async def async_step_mqtt(
+        self, discovery_info: MqttServiceInfo
+    ) -> FlowResult:
+        """Handle a flow initialized by MQTT discovery."""
+        # Validate the message, abort if it fails
+        splitted_topic = discovery_info.topic.split("/")
+        if len(splitted_topic) != 5:
+            # Not a Flukso discovery message
+            return self.async_abort(reason="invalid_discovery_info")
+        if len(splitted_topic[2]) != 32:
+            # Not a Flukso device hash
+            return self.async_abort(reason="invalid_discovery_info")
+
+        device_hash = splitted_topic[2]
+        _LOGGER.info(f"Discovered device {device_hash}")
+        return await self._async_create_flukso(device_hash)
