@@ -24,12 +24,12 @@ from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
                                  CONF_ENTITY_CATEGORY, CONF_FORCE_UPDATE,
                                  CONF_ICON, CONF_NAME, CONF_UNIQUE_ID,
                                  CONF_UNIT_OF_MEASUREMENT, CONF_VALUE_TEMPLATE,
-                                 ELECTRIC_CURRENT_AMPERE,
-                                 ELECTRIC_POTENTIAL_VOLT, ENERGY_WATT_HOUR,
+                                 UnitOfElectricCurrent,
+                                 UnitOfElectricPotential, UnitOfEnergy,
                                  LIGHT_LUX, PERCENTAGE,
-                                 POWER_VOLT_AMPERE_REACTIVE, POWER_WATT,
-                                 PRESSURE_HPA, TEMP_CELSIUS,
-                                 VOLUME_CUBIC_METERS, VOLUME_LITERS, Platform)
+                                 POWER_VOLT_AMPERE_REACTIVE, UnitOfPower,
+                                 UnitOfPressure, UnitOfTemperature,
+                                 UnitOfVolume, UnitOfVolume, Platform)
 from homeassistant.core import callback
 from homeassistant.helpers.entity import EntityCategory
 
@@ -102,52 +102,52 @@ UNIT_OF_MEASUREMENT_MAP_FLM03 = {
             "q2": POWER_VOLT_AMPERE_REACTIVE,
             "q3": POWER_VOLT_AMPERE_REACTIVE,
             "q4": POWER_VOLT_AMPERE_REACTIVE,
-            "pplus": POWER_WATT,
-            "pminus": POWER_WATT,
-            "vrms": ELECTRIC_POTENTIAL_VOLT,
-            "irms": ELECTRIC_CURRENT_AMPERE,
+            "pplus": UnitOfPower.WATT,
+            "pminus": UnitOfPower.WATT,
+            "vrms": UnitOfElectricPotential.VOLT,
+            "irms": UnitOfElectricCurrent.AMPERE,
         },
         "counter": {
             "q1": "VARh",
             "q2": "VARh",
             "q3": "VARh",
             "q4": "VARh",
-            "pplus": ENERGY_WATT_HOUR,
-            "pminus": ENERGY_WATT_HOUR,
+            "pplus": UnitOfEnergy.WATT_HOUR,
+            "pminus": UnitOfEnergy.WATT_HOUR,
         },
     },
-    "temperature": TEMP_CELSIUS,
-    "pressure": PRESSURE_HPA,
+    "temperature": UnitOfTemperature.CELSIUS,
+    "pressure": UnitOfPressure.HPA,
     "battery": PERCENTAGE,
     "water": {
         "gauge": "L/s",
-        "counter": VOLUME_LITERS,
+        "counter": UnitOfVolume.LITERS,
     },
     "light": LIGHT_LUX,
     "humidity": PERCENTAGE,
     "gas":  {
         "gauge": "m³/s",
-        "counter": VOLUME_CUBIC_METERS,
+        "counter": UnitOfVolume.CUBIC_METERS,
     },
 }
 
 UNIT_OF_MEASUREMENT_MAP_FLM02 = {
     "electricity": {
-        "gauge": POWER_WATT,
-        "counter": ENERGY_WATT_HOUR
+        "gauge": UnitOfPower.WATT,
+        "counter": UnitOfEnergy.WATT_HOUR
     },
-    "temperature": TEMP_CELSIUS,
-    "pressure": PRESSURE_HPA,
+    "temperature": UnitOfTemperature.CELSIUS,
+    "pressure": UnitOfPressure.HPA,
     "battery": PERCENTAGE,
     "water": {
         "gauge": "L/s",
-        "counter": VOLUME_LITERS,
+        "counter": UnitOfVolume.LITERS,
     },
     "light": LIGHT_LUX,
     "humidity": PERCENTAGE,
     "gas":  {
         "gauge": "m³/s",
-        "counter": VOLUME_CUBIC_METERS,
+        "counter": UnitOfVolume.CUBIC_METERS,
     },
 }
 
