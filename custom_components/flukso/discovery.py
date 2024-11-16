@@ -10,12 +10,12 @@ from homeassistant.components.mqtt import (CONF_QOS, CONF_STATE_TOPIC,
 from homeassistant.components.mqtt.binary_sensor import CONF_OFF_DELAY
 from homeassistant.components.mqtt.binary_sensor import \
     PLATFORM_SCHEMA_MODERN as MQTT_BINARY_SENSOR_PLATFORM_SCHEMA
-from homeassistant.components.mqtt.mixins import (CONF_CONNECTIONS,
-                                                  CONF_ENABLED_BY_DEFAULT,
-                                                  CONF_IDENTIFIERS,
-                                                  CONF_MANUFACTURER,
-                                                  CONF_OBJECT_ID,
-                                                  CONF_SW_VERSION)
+from homeassistant.components.mqtt.const import (CONF_CONNECTIONS,
+                                                 CONF_ENABLED_BY_DEFAULT,
+                                                 CONF_IDENTIFIERS,
+                                                 CONF_MANUFACTURER,
+                                                 CONF_OBJECT_ID,
+                                                 CONF_SW_VERSION)
 from homeassistant.components.mqtt.sensor import CONF_STATE_CLASS
 from homeassistant.components.mqtt.sensor import \
     PLATFORM_SCHEMA_MODERN as MQTT_SENSOR_PLATFORM_SCHEMA
