@@ -27,7 +27,7 @@ from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
                                  UnitOfElectricCurrent,
                                  UnitOfElectricPotential, UnitOfEnergy,
                                  LIGHT_LUX, PERCENTAGE,
-                                 POWER_VOLT_AMPERE_REACTIVE, UnitOfPower,
+                                 UnitOfReactivePower, UnitOfPower,
                                  UnitOfPressure, UnitOfTemperature,
                                  UnitOfVolume, UnitOfVolume, Platform)
 from homeassistant.core import callback
@@ -98,10 +98,10 @@ UNIT_OF_MEASUREMENT_MAP_FLM03 = {
     "electricity": {
         "gauge": {
             "pf": PERCENTAGE,
-            "q1": POWER_VOLT_AMPERE_REACTIVE,
-            "q2": POWER_VOLT_AMPERE_REACTIVE,
-            "q3": POWER_VOLT_AMPERE_REACTIVE,
-            "q4": POWER_VOLT_AMPERE_REACTIVE,
+            "q1": UnitOfReactivePower.VOLT_AMPERE_REACTIVE,
+            "q2": UnitOfReactivePower.VOLT_AMPERE_REACTIVE,
+            "q3": UnitOfReactivePower.VOLT_AMPERE_REACTIVE,
+            "q4": UnitOfReactivePower.VOLT_AMPERE_REACTIVE,
             "pplus": UnitOfPower.WATT,
             "pminus": UnitOfPower.WATT,
             "vrms": UnitOfElectricPotential.VOLT,
