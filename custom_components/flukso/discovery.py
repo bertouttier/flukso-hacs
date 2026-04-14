@@ -14,7 +14,6 @@ from homeassistant.components.mqtt.const import (CONF_CONNECTIONS,
                                                  CONF_ENABLED_BY_DEFAULT,
                                                  CONF_IDENTIFIERS,
                                                  CONF_MANUFACTURER,
-                                                 CONF_OBJECT_ID,
                                                  CONF_SW_VERSION)
 from homeassistant.components.mqtt.sensor import CONF_STATE_CLASS
 from homeassistant.components.mqtt.sensor import \
@@ -66,8 +65,8 @@ DATA_TYPE_MAP_FLM03 = {
             "pminus": ["gauge", "counter"],
         },
     },
-    "gas": {"counter": ["gauge", "counter"]},
-    "water": {"counter": ["gauge", "counter"]},
+    "gas": {"counter": ["counter"]},
+    "water": {"counter": ["counter"]},
     "temperature": {"gauge": ["gauge"]},
     "pressure": {"gauge": ["gauge"]},
     "battery": {"gauge": ["gauge"]},
@@ -81,8 +80,8 @@ DATA_TYPE_MAP_FLM03 = {
 
 DATA_TYPE_MAP_FLM02 = {
     "electricity": {"counter": ["gauge", "counter"]},
-    "gas": {"counter": ["gauge", "counter"]},
-    "water": {"counter": ["gauge", "counter"]},
+    "gas": {"counter": ["counter"]},
+    "water": {"counter": ["counter"]},
     "temperature": {"gauge": ["gauge"]},
     "pressure": {"gauge": ["gauge"]},
     "battery": {"gauge": ["gauge"]},
@@ -120,13 +119,11 @@ UNIT_OF_MEASUREMENT_MAP_FLM03 = {
     "pressure": UnitOfPressure.HPA,
     "battery": PERCENTAGE,
     "water": {
-        "gauge": "L/s",
         "counter": UnitOfVolume.LITERS,
     },
     "light": LIGHT_LUX,
     "humidity": PERCENTAGE,
     "gas":  {
-        "gauge": "m³/s",
         "counter": UnitOfVolume.CUBIC_METERS,
     },
 }
@@ -140,13 +137,11 @@ UNIT_OF_MEASUREMENT_MAP_FLM02 = {
     "pressure": UnitOfPressure.HPA,
     "battery": PERCENTAGE,
     "water": {
-        "gauge": "L/s",
         "counter": UnitOfVolume.LITERS,
     },
     "light": LIGHT_LUX,
     "humidity": PERCENTAGE,
     "gas":  {
-        "gauge": "m³/s",
         "counter": UnitOfVolume.CUBIC_METERS,
     },
 }
@@ -207,12 +202,10 @@ STATE_CLASS_MAP = {
         "gauge": SensorStateClass.MEASUREMENT,
     },
     "water": {
-        "counter": SensorStateClass.TOTAL_INCREASING,
-        "gauge": SensorStateClass.MEASUREMENT,
+        "counter": SensorStateClass.TOTAL_INCREASING
     },
     "gas": {
-        "counter": SensorStateClass.TOTAL_INCREASING,
-        "gauge": SensorStateClass.MEASUREMENT
+        "counter": SensorStateClass.TOTAL_INCREASING
     },
     "temperature": SensorStateClass.MEASUREMENT,
     "pressure": SensorStateClass.MEASUREMENT,
@@ -263,43 +256,6 @@ def _get_sensor_name(sensor, entry_data):
                 name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
     return name
 
-
-def _get_sensor_object_id(sensor, entry_data):
-    """Generate a name based on the kube and flx config, and the data type and sub type."""
-    name = "unknown"
-    if "class" in sensor and sensor["class"] == "kube":
-        if (
-            CONFTYPE_KUBE in entry_data
-            and "name" in entry_data[CONFTYPE_KUBE][str(sensor["kid"])]
-            and entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-        ):
-            name = entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-    else:
-        if "port" in sensor:
-            if "function" in sensor:
-                name = sensor["function"]
-            elif (
-                CONFTYPE_FLX in entry_data
-                and "name" in entry_data[CONFTYPE_FLX][str(sensor["port"][0])]
-                and entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
-            ):
-                name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
-
-    if "type" in sensor:
-        name = f'{name} {sensor["type"]}'
-        if "data_type" in sensor:
-            if sensor["type"] == "electricity":
-                if "subtype" in sensor:
-                    name = f'{name} {sensor["subtype"]} {sensor["data_type"]}'
-                else:
-                    name = f'{name} {sensor["data_type"]}'
-            elif sensor["type"] == "water":
-                name = f'{name} {sensor["data_type"]}'
-            elif sensor["type"] == "gas":
-                name = f'{name} {sensor["data_type"]}'
-    return name
-
-
 def _is_binary_sensor(sensor):
     if "class" in sensor and "type" in sensor:
         return (sensor["class"] == "kube") and (
@@ -321,7 +277,6 @@ def _get_binary_sensor_entities(entry_data, device_info):
 
         sensorconfig = {}
         sensorconfig[CONF_NAME] = _get_sensor_name(sensor, entry_data)
-        sensorconfig[CONF_OBJECT_ID] = _get_sensor_object_id(sensor, entry_data)
         sensorconfig[CONF_DEVICE] = device_info
         sensorconfig[CONF_ENTITY_CATEGORY] = EntityCategory.DIAGNOSTIC
         sensorconfig[CONF_ENABLED_BY_DEFAULT] = True
@@ -381,7 +336,6 @@ def _get_binary_sensor_entities(entry_data, device_info):
 def _get_sensor_config(sensor, entry_data, device_info):
     sensorconfig = {}
     sensorconfig[CONF_NAME] = _get_sensor_name(sensor, entry_data)
-    sensorconfig[CONF_OBJECT_ID] = _get_sensor_object_id(sensor, entry_data)
     sensorconfig[CONF_DEVICE] = device_info
     sensorconfig[CONF_ENTITY_CATEGORY] = EntityCategory.DIAGNOSTIC
     sensorconfig[CONF_ENABLED_BY_DEFAULT] = True
@@ -455,9 +409,10 @@ def _get_sensor_entities(entry_data, device_info):
             config = _get_sensor_config(s, entry_data, device_info)
             try:
                 entities.append(MQTT_SENSOR_PLATFORM_SCHEMA(config))
-            except:
+            except Exception as ex:
                 _LOGGER.error(f'Could not convert config to to MQTT sensor config for id  {s["id"]}')
-                _LOGGER.debug(config)
+                #_LOGGER.debug(config)
+                _LOGGER.debug(ex)
 
     return entities
 
