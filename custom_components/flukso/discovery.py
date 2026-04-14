@@ -256,43 +256,6 @@ def _get_sensor_name(sensor, entry_data):
                 name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
     return name
 
-
-def _get_sensor_object_id(sensor, entry_data):
-    """Generate a name based on the kube and flx config, and the data type and sub type."""
-    name = "unknown"
-    if "class" in sensor and sensor["class"] == "kube":
-        if (
-            CONFTYPE_KUBE in entry_data
-            and "name" in entry_data[CONFTYPE_KUBE][str(sensor["kid"])]
-            and entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-        ):
-            name = entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-    else:
-        if "port" in sensor:
-            if "function" in sensor:
-                name = sensor["function"]
-            elif (
-                CONFTYPE_FLX in entry_data
-                and "name" in entry_data[CONFTYPE_FLX][str(sensor["port"][0])]
-                and entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
-            ):
-                name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
-
-    if "type" in sensor:
-        name = f'{name} {sensor["type"]}'
-        if "data_type" in sensor:
-            if sensor["type"] == "electricity":
-                if "subtype" in sensor:
-                    name = f'{name} {sensor["subtype"]} {sensor["data_type"]}'
-                else:
-                    name = f'{name} {sensor["data_type"]}'
-            elif sensor["type"] == "water":
-                name = f'{name} {sensor["data_type"]}'
-            elif sensor["type"] == "gas":
-                name = f'{name} {sensor["data_type"]}'
-    return name
-
-
 def _is_binary_sensor(sensor):
     if "class" in sensor and "type" in sensor:
         return (sensor["class"] == "kube") and (
