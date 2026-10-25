@@ -1,15 +1,27 @@
 {
   "config": {
+    "flow_title": "Flukso {device_hash}",
     "step": {
       "user": {
         "title": "Flukso",
-        "description": "Please enter the Flukso device hash.",
+        "description": "Enter the Flukso device hash. You find it in the MQTT topics `/device/<device hash>/config/...` published by your Flukso.",
         "data": {
-          "device_hash": "Hash"
+          "device_hash": "Device hash"
+        },
+        "data_description": {
+          "device_hash": "The 32 character device hash, not a sensor hash."
         }
+      },
+      "discovery_confirm": {
+        "description": "Do you want to add Flukso {device_hash}?"
       }
     },
+    "error": {
+      "invalid_device_hash": "A device hash consists of 32 hexadecimal characters."
+    },
     "abort": {
+      "already_configured": "This Flukso is already configured.",
+      "already_in_progress": "Configuration of this Flukso is already in progress.",
       "invalid_discovery_info": "Invalid discovery info"
     }
   }

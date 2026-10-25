@@ -1,51 +1,45 @@
-"""Flukso MQTT discovery."""
+"""Fetch and interpret the Flukso device configuration published over MQTT."""
+
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import re
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
 
+from homeassistant.components import mqtt
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.components.mqtt import (CONF_QOS, CONF_STATE_TOPIC,
-                                           subscription)
-from homeassistant.components.mqtt.binary_sensor import CONF_OFF_DELAY
-from homeassistant.components.mqtt.binary_sensor import \
-    PLATFORM_SCHEMA_MODERN as MQTT_BINARY_SENSOR_PLATFORM_SCHEMA
-from homeassistant.components.mqtt.const import (CONF_CONNECTIONS,
-                                                 CONF_ENABLED_BY_DEFAULT,
-                                                 CONF_IDENTIFIERS,
-                                                 CONF_MANUFACTURER,
-                                                 CONF_OBJECT_ID,
-                                                 CONF_SW_VERSION)
-from homeassistant.components.mqtt.sensor import CONF_STATE_CLASS
-from homeassistant.components.mqtt.sensor import \
-    PLATFORM_SCHEMA_MODERN as MQTT_SENSOR_PLATFORM_SCHEMA
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import (CONF_DEVICE, CONF_DEVICE_CLASS,
-                                 CONF_ENTITY_CATEGORY, CONF_FORCE_UPDATE,
-                                 CONF_ICON, CONF_NAME, CONF_UNIQUE_ID,
-                                 CONF_UNIT_OF_MEASUREMENT, CONF_VALUE_TEMPLATE,
-                                 UnitOfElectricCurrent,
-                                 UnitOfElectricPotential, UnitOfEnergy,
-                                 LIGHT_LUX, PERCENTAGE,
-                                 UnitOfReactivePower, UnitOfPower,
-                                 UnitOfPressure, UnitOfTemperature,
-                                 UnitOfVolume, UnitOfVolume, Platform)
-from homeassistant.core import callback
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.const import (
+    LIGHT_LUX,
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfPressure,
+    UnitOfReactiveEnergy,
+    UnitOfReactivePower,
+    UnitOfTemperature,
+    UnitOfVolume,
+    UnitOfVolumeFlowRate,
+)
+from homeassistant.core import HomeAssistant, callback
 
-from .const import (CONF_DEVICE_FIRMWARE, CONF_DEVICE_HASH, CONF_DEVICE_SERIAL,
-                    CONF_FLM03, DEFAULT_TIMEOUT, DOMAIN)
+from .const import CONFIG_TIMEOUT, OPTIONAL_CONFIG_TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFTYPE_KUBE = "kube"
 CONFTYPE_FLX = "flx"
 CONFTYPE_SENSOR = "sensor"
-CONFTYPES = [
-    CONFTYPE_KUBE,
-    CONFTYPE_FLX,
-    CONFTYPE_SENSOR
-]
+CONFTYPES = (CONFTYPE_KUBE, CONFTYPE_FLX, CONFTYPE_SENSOR)
+
+BINARY_SENSOR_TYPES = ("movement", "vibration", "error")
 
 DATA_TYPE_MAP_FLM03 = {
     "electricity": {
@@ -94,7 +88,24 @@ DATA_TYPE_MAP_FLM02 = {
     "vibration": {"counter": ["gauge"]},
 }
 
+_UNIT_OF_MEASUREMENT_MAP_COMMON = {
+    "temperature": UnitOfTemperature.CELSIUS,
+    "pressure": UnitOfPressure.HPA,
+    "battery": PERCENTAGE,
+    "water": {
+        "gauge": UnitOfVolumeFlowRate.LITERS_PER_SECOND,
+        "counter": UnitOfVolume.LITERS,
+    },
+    "light": LIGHT_LUX,
+    "humidity": PERCENTAGE,
+    "gas": {
+        "gauge": UnitOfVolumeFlowRate.CUBIC_METERS_PER_SECOND,
+        "counter": UnitOfVolume.CUBIC_METERS,
+    },
+}
+
 UNIT_OF_MEASUREMENT_MAP_FLM03 = {
+    **_UNIT_OF_MEASUREMENT_MAP_COMMON,
     "electricity": {
         "gauge": {
             "pf": PERCENTAGE,
@@ -108,50 +119,45 @@ UNIT_OF_MEASUREMENT_MAP_FLM03 = {
             "irms": UnitOfElectricCurrent.AMPERE,
         },
         "counter": {
-            "q1": "VARh",
-            "q2": "VARh",
-            "q3": "VARh",
-            "q4": "VARh",
+            "q1": UnitOfReactiveEnergy.VOLT_AMPERE_REACTIVE_HOUR,
+            "q2": UnitOfReactiveEnergy.VOLT_AMPERE_REACTIVE_HOUR,
+            "q3": UnitOfReactiveEnergy.VOLT_AMPERE_REACTIVE_HOUR,
+            "q4": UnitOfReactiveEnergy.VOLT_AMPERE_REACTIVE_HOUR,
             "pplus": UnitOfEnergy.WATT_HOUR,
             "pminus": UnitOfEnergy.WATT_HOUR,
         },
     },
-    "temperature": UnitOfTemperature.CELSIUS,
-    "pressure": UnitOfPressure.HPA,
-    "battery": PERCENTAGE,
-    "water": {
-        "gauge": "L/s",
-        "counter": UnitOfVolume.LITERS,
-    },
-    "light": LIGHT_LUX,
-    "humidity": PERCENTAGE,
-    "gas":  {
-        "gauge": "m³/s",
-        "counter": UnitOfVolume.CUBIC_METERS,
-    },
 }
 
 UNIT_OF_MEASUREMENT_MAP_FLM02 = {
+    **_UNIT_OF_MEASUREMENT_MAP_COMMON,
     "electricity": {
         "gauge": UnitOfPower.WATT,
-        "counter": UnitOfEnergy.WATT_HOUR
-    },
-    "temperature": UnitOfTemperature.CELSIUS,
-    "pressure": UnitOfPressure.HPA,
-    "battery": PERCENTAGE,
-    "water": {
-        "gauge": "L/s",
-        "counter": UnitOfVolume.LITERS,
-    },
-    "light": LIGHT_LUX,
-    "humidity": PERCENTAGE,
-    "gas":  {
-        "gauge": "m³/s",
-        "counter": UnitOfVolume.CUBIC_METERS,
+        "counter": UnitOfEnergy.WATT_HOUR,
     },
 }
 
+_DEVICE_CLASS_MAP_COMMON = {
+    "water": {
+        "gauge": SensorDeviceClass.VOLUME_FLOW_RATE,
+        "counter": SensorDeviceClass.WATER,
+    },
+    "temperature": SensorDeviceClass.TEMPERATURE,
+    "pressure": SensorDeviceClass.PRESSURE,
+    "battery": SensorDeviceClass.BATTERY,
+    "light": SensorDeviceClass.ILLUMINANCE,
+    "humidity": SensorDeviceClass.HUMIDITY,
+    "gas": {
+        "gauge": SensorDeviceClass.VOLUME_FLOW_RATE,
+        "counter": SensorDeviceClass.GAS,
+    },
+    "error": BinarySensorDeviceClass.PROBLEM,
+    "movement": BinarySensorDeviceClass.MOTION,
+    "vibration": BinarySensorDeviceClass.VIBRATION,
+}
+
 DEVICE_CLASS_MAP_FLM03 = {
+    **_DEVICE_CLASS_MAP_COMMON,
     "electricity": {
         "gauge": {
             "pf": SensorDeviceClass.POWER_FACTOR,
@@ -165,33 +171,22 @@ DEVICE_CLASS_MAP_FLM03 = {
             "irms": SensorDeviceClass.CURRENT,
         },
         "counter": {
+            "q1": SensorDeviceClass.REACTIVE_ENERGY,
+            "q2": SensorDeviceClass.REACTIVE_ENERGY,
+            "q3": SensorDeviceClass.REACTIVE_ENERGY,
+            "q4": SensorDeviceClass.REACTIVE_ENERGY,
             "pplus": SensorDeviceClass.ENERGY,
-            "pminus": SensorDeviceClass.ENERGY
+            "pminus": SensorDeviceClass.ENERGY,
         },
     },
-    "water": SensorDeviceClass.WATER,
-    "temperature": SensorDeviceClass.TEMPERATURE,
-    "pressure": SensorDeviceClass.PRESSURE,
-    "battery": SensorDeviceClass.BATTERY,
-    "light": SensorDeviceClass.ILLUMINANCE,
-    "humidity": SensorDeviceClass.HUMIDITY,
-    "gas": SensorDeviceClass.GAS,
-    "error": BinarySensorDeviceClass.PROBLEM,
 }
 
 DEVICE_CLASS_MAP_FLM02 = {
+    **_DEVICE_CLASS_MAP_COMMON,
     "electricity": {
         "gauge": SensorDeviceClass.POWER,
         "counter": SensorDeviceClass.ENERGY,
     },
-    "water": SensorDeviceClass.WATER,
-    "temperature": SensorDeviceClass.TEMPERATURE,
-    "pressure": SensorDeviceClass.PRESSURE,
-    "battery": SensorDeviceClass.BATTERY,
-    "light": SensorDeviceClass.ILLUMINANCE,
-    "humidity": SensorDeviceClass.HUMIDITY,
-    "gas": SensorDeviceClass.GAS,
-    "error": BinarySensorDeviceClass.PROBLEM,
 }
 
 ICON_MAP = {
@@ -212,354 +207,262 @@ STATE_CLASS_MAP = {
     },
     "gas": {
         "counter": SensorStateClass.TOTAL_INCREASING,
-        "gauge": SensorStateClass.MEASUREMENT
+        "gauge": SensorStateClass.MEASUREMENT,
     },
     "temperature": SensorStateClass.MEASUREMENT,
     "pressure": SensorStateClass.MEASUREMENT,
     "battery": SensorStateClass.MEASUREMENT,
     "light": SensorStateClass.MEASUREMENT,
     "humidity": SensorStateClass.MEASUREMENT,
-    "error": SensorStateClass.MEASUREMENT,
     "proximity": SensorStateClass.MEASUREMENT,
-    "movement": SensorStateClass.MEASUREMENT,
-    "vibration": SensorStateClass.MEASUREMENT,
+}
+
+# Rounding applied to the published value. Noisy sensors (temperature, battery
+# voltage, power factor) are rounded so tiny fluctuations do not produce a new
+# state, and therefore a new recorder row, on every message.
+DISPLAY_PRECISION_MAP = {
+    "temperature": 1,
+    "humidity": 0,
+    "pressure": 0,
+    "battery": 0,
+    "light": 0,
 }
 
 
-def _get_sensor_detail(sensor, detail_map):
-    m = detail_map
+@dataclass
+class FluksoConfig:
+    """The configuration a Flukso publishes on /device/<hash>/config/+ and TAP."""
+
+    device_hash: str
+    sensor: dict[str, Any] = field(default_factory=dict)
+    kube: dict[str, Any] = field(default_factory=dict)
+    flx: dict[str, Any] = field(default_factory=dict)
+    serial: str | None = None
+    firmware: str | None = None
+
+    @property
+    def is_flm03(self) -> bool:
+        """Only the FLM03 publishes a TAP report."""
+        return self.serial is not None
+
+
+@dataclass(frozen=True, kw_only=True)
+class FluksoEntityConfig:
+    """Everything needed to create one Flukso entity."""
+
+    unique_id: str
+    name: str
+    state_topic: str
+    sensor_type: str | None
+    subtype: str | None
+    data_type: str
+    device_class: str | None = None
+    state_class: SensorStateClass | None = None
+    unit_of_measurement: str | None = None
+    icon: str | None = None
+    entity_category: EntityCategory | None = None
+    precision: int | None = None
+    value_fn: Callable[[float], float] = lambda value: value
+
+
+def _get_sensor_detail(sensor: dict[str, Any], detail_map: dict[str, Any]) -> Any:
+    """Walk detail_map by the sensor's type, data_type and subtype."""
+    m: Any = detail_map
     levels = ["type", "data_type", "subtype"]
     while isinstance(m, dict) and levels:
         level = levels.pop(0)
         if level in sensor:
-            if sensor[level] in m:
-                m = m[sensor[level]]
-            else:
-                m = None
+            m = m.get(sensor[level])
     return m
 
 
-def _get_sensor_name(sensor, entry_data):
-    """Generate a name based on the kube and flx config, and the data type and sub type."""
-    name = "unknown"
-    if "class" in sensor and sensor["class"] == "kube":
-        name = "unknown kube"
-        if (
-            CONFTYPE_KUBE in entry_data
-            and "name" in entry_data[CONFTYPE_KUBE][str(sensor["kid"])]
-            and entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-        ):
-            name = entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-    else:
-        "unknown sensor"
-        if "port" in sensor:
-            if "function" in sensor:
-                name = sensor["function"]
-            elif (
-                CONFTYPE_FLX in entry_data
-                and "name" in entry_data[CONFTYPE_FLX][str(sensor["port"][0])]
-                and entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
-            ):
-                name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
+def _get_base_name(sensor: dict[str, Any], config: FluksoConfig) -> str:
+    """Name a sensor after its kube or flx port, as configured on the Flukso."""
+    if sensor.get("class") == "kube":
+        kube = config.kube.get(str(sensor.get("kid")), {})
+        return kube.get("name") or "unknown kube"
+    if "port" in sensor:
+        if "function" in sensor:
+            return sensor["function"]
+        port = config.flx.get(str(sensor["port"][0]), {})
+        if port.get("name"):
+            return port["name"]
+    return "unknown"
+
+
+def _get_entity_name(sensor: dict[str, Any], config: FluksoConfig) -> str:
+    """Combine the base name with the type, subtype and data type."""
+    name = _get_base_name(sensor, config)
+    sensor_type = sensor.get("type")
+    if sensor_type is None:
+        return name
+    name = f"{name} {sensor_type}"
+    if sensor_type == "electricity" and "subtype" in sensor:
+        return f"{name} {sensor['subtype']} {sensor['data_type']}"
+    if sensor_type in ("electricity", "water", "gas"):
+        return f"{name} {sensor['data_type']}"
     return name
 
 
-def _get_sensor_object_id(sensor, entry_data):
-    """Generate a name based on the kube and flx config, and the data type and sub type."""
-    name = "unknown"
-    if "class" in sensor and sensor["class"] == "kube":
-        if (
-            CONFTYPE_KUBE in entry_data
-            and "name" in entry_data[CONFTYPE_KUBE][str(sensor["kid"])]
-            and entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-        ):
-            name = entry_data[CONFTYPE_KUBE][str(sensor["kid"])]["name"]
-    else:
-        if "port" in sensor:
-            if "function" in sensor:
-                name = sensor["function"]
-            elif (
-                CONFTYPE_FLX in entry_data
-                and "name" in entry_data[CONFTYPE_FLX][str(sensor["port"][0])]
-                and entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
-            ):
-                name = entry_data[CONFTYPE_FLX][str(sensor["port"][0])]["name"]
-
-    if "type" in sensor:
-        name = f'{name} {sensor["type"]}'
-        if "data_type" in sensor:
-            if sensor["type"] == "electricity":
-                if "subtype" in sensor:
-                    name = f'{name} {sensor["subtype"]} {sensor["data_type"]}'
-                else:
-                    name = f'{name} {sensor["data_type"]}'
-            elif sensor["type"] == "water":
-                name = f'{name} {sensor["data_type"]}'
-            elif sensor["type"] == "gas":
-                name = f'{name} {sensor["data_type"]}'
-    return name
+def _get_value_fn(sensor: dict[str, Any]) -> Callable[[float], float]:
+    """Convert the raw Flukso value to the unit Home Assistant expects."""
+    match sensor.get("type"), sensor.get("subtype"):
+        case "battery", _:
+            # The kube reports its battery voltage; 3.3V is a full battery.
+            return lambda value: value / 3.3 * 100
+        case "gas", _:
+            return lambda value: value / 1000
+        case "electricity", "pf":
+            return lambda value: value * 100
+    return lambda value: value
 
 
-def _is_binary_sensor(sensor):
-    if "class" in sensor and "type" in sensor:
-        return (sensor["class"] == "kube") and (
-            sensor["type"] in ("movement", "vibration", "error")
-        )
-    return False
+def _is_binary_sensor(sensor: dict[str, Any]) -> bool:
+    return sensor.get("class") == "kube" and sensor.get("type") in BINARY_SENSOR_TYPES
 
 
-def _get_binary_sensor_entities(entry_data, device_info):
-    """Generate binary sensor configuration."""
-    entities = []
-
-    for sensor in entry_data[CONFTYPE_SENSOR].values():
-        if "enable" not in sensor or sensor["enable"] == 0:
-            continue
-
-        if not _is_binary_sensor(sensor):
-            continue
-
-        sensorconfig = {}
-        sensorconfig[CONF_NAME] = _get_sensor_name(sensor, entry_data)
-        sensorconfig[CONF_OBJECT_ID] = _get_sensor_object_id(sensor, entry_data)
-        sensorconfig[CONF_DEVICE] = device_info
-        sensorconfig[CONF_ENTITY_CATEGORY] = EntityCategory.DIAGNOSTIC
-        sensorconfig[CONF_ENABLED_BY_DEFAULT] = True
-        sensorconfig[CONF_STATE_TOPIC] = f'/sensor/{sensor["id"]}/{sensor["data_type"]}'
-        sensorconfig[CONF_QOS] = 0
-        sensorconfig[CONF_FORCE_UPDATE] = False
-        discovery_hash = (
-            entry_data[CONF_DEVICE_HASH],
-            sensor["id"],
-            sensor["data_type"],
-        )
-        sensorconfig[CONF_UNIQUE_ID] = "_".join(discovery_hash)
-        if entry_data[CONF_FLM03]:
-            device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM03)
-        else:
-            device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM02)
-        if device_class:
-            sensorconfig[CONF_DEVICE_CLASS] = device_class
-        icon = _get_sensor_detail(sensor, ICON_MAP)
-        if icon:
-            sensorconfig[CONF_ICON] = icon
-        if entry_data[CONF_FLM03]:
-            uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM03)
-        else:
-            uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM02)
-        if uom:
-            sensorconfig[CONF_UNIT_OF_MEASUREMENT] = uom
-        if device_class and (device_class == BinarySensorDeviceClass.PROBLEM):
-            sensorconfig[
-                CONF_VALUE_TEMPLATE
-            ] = """
-                    {% if (value.split(",")[1]|int) > 0 %}
-                        ON
-                    {% else %}
-                        OFF
-                    {% endif %}"""
-        else:
-            sensorconfig[CONF_OFF_DELAY] = DEFAULT_TIMEOUT
-            sensorconfig[
-                CONF_VALUE_TEMPLATE
-            ] = """
-                    {% if value %}
-                        ON
-                    {% else %}
-                        OFF
-                    {% endif %}"""
-
-        try:
-            entities.append(MQTT_BINARY_SENSOR_PLATFORM_SCHEMA(sensorconfig))
-        except:
-            _LOGGER.error(f'Could not convert config to to MQTT binary sensor config for id  {sensor["id"]}')
-            _LOGGER.debug(sensorconfig)
-
-    return entities
+def _enabled_sensors(config: FluksoConfig) -> list[dict[str, Any]]:
+    """Return the sensors that are enabled and registered (have an id)."""
+    return [
+        sensor
+        for sensor in config.sensor.values()
+        if isinstance(sensor, dict) and sensor.get("enable") and sensor.get("id")
+    ]
 
 
-def _get_sensor_config(sensor, entry_data, device_info):
-    sensorconfig = {}
-    sensorconfig[CONF_NAME] = _get_sensor_name(sensor, entry_data)
-    sensorconfig[CONF_OBJECT_ID] = _get_sensor_object_id(sensor, entry_data)
-    sensorconfig[CONF_DEVICE] = device_info
-    sensorconfig[CONF_ENTITY_CATEGORY] = EntityCategory.DIAGNOSTIC
-    sensorconfig[CONF_ENABLED_BY_DEFAULT] = True
-    sensorconfig[CONF_STATE_TOPIC] = f'/sensor/{sensor["id"]}/{sensor["data_type"]}'
-    sensorconfig[CONF_STATE_CLASS] = _get_sensor_detail(sensor, STATE_CLASS_MAP)
-    sensorconfig[CONF_QOS] = 0
-    sensorconfig[CONF_FORCE_UPDATE] = True
-    discovery_hash = (
-        entry_data[CONF_DEVICE_HASH],
-        sensor["id"],
-        sensor["data_type"],
-    )
-    sensorconfig[CONF_UNIQUE_ID] = "_".join(discovery_hash)
-    if entry_data[CONF_FLM03]:
+def _build_entity_config(
+    sensor: dict[str, Any], config: FluksoConfig
+) -> FluksoEntityConfig:
+    if config.is_flm03:
         device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM03)
-    else:
-        device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM02)
-    if device_class:
-        sensorconfig[CONF_DEVICE_CLASS] = device_class
-    icon = _get_sensor_detail(sensor, ICON_MAP)
-    if icon:
-        sensorconfig[CONF_ICON] = icon
-    if entry_data[CONF_FLM03]:
         uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM03)
     else:
+        device_class = _get_sensor_detail(sensor, DEVICE_CLASS_MAP_FLM02)
         uom = _get_sensor_detail(sensor, UNIT_OF_MEASUREMENT_MAP_FLM02)
-    if uom:
-        sensorconfig[CONF_UNIT_OF_MEASUREMENT] = uom
 
-    sensorconfig[CONF_VALUE_TEMPLATE] = """{{ value.split(",")[1] | float }}"""
-    if "type" in sensor:
-        if sensor["type"] == "temperature":
-            sensorconfig[
-                CONF_VALUE_TEMPLATE
-            ] = """{{ value.split(",")[1] | float | round(1) }}"""
-        elif sensor["type"] == "battery":
-            sensorconfig[
-                CONF_VALUE_TEMPLATE
-            ] = """{{ (((value.split(",")[1] | float) / 3.3) * 100) | round(2) }}"""
-        elif sensor["type"] == "gas":
-            sensorconfig[
-                CONF_VALUE_TEMPLATE
-            ] = """{{ ((value.split(",")[1] | float) / 1000) }}"""
-        elif sensor["type"] == "electricity":
-            if "subtype" in sensor and sensor["subtype"] == "pf":
-                sensorconfig[
-                    CONF_VALUE_TEMPLATE
-                ] = """{{ ((value.split(",")[1] | float) * 100) | round(1) }}"""
+    sensor_type = sensor.get("type")
+    subtype = sensor.get("subtype")
+    precision = DISPLAY_PRECISION_MAP.get(sensor_type)
+    if sensor_type == "electricity" and subtype == "pf":
+        precision = 1
 
-    return sensorconfig
+    return FluksoEntityConfig(
+        unique_id=f"{config.device_hash}_{sensor['id']}_{sensor['data_type']}",
+        name=_get_entity_name(sensor, config),
+        state_topic=f"/sensor/{sensor['id']}/{sensor['data_type']}",
+        sensor_type=sensor_type,
+        subtype=subtype,
+        data_type=sensor["data_type"],
+        device_class=device_class if isinstance(device_class, str) else None,
+        state_class=_get_sensor_detail(sensor, STATE_CLASS_MAP),
+        unit_of_measurement=uom if isinstance(uom, str) else None,
+        icon=_get_sensor_detail(sensor, ICON_MAP),
+        entity_category=(
+            EntityCategory.DIAGNOSTIC if sensor_type in ("battery", "error") else None
+        ),
+        precision=precision,
+        value_fn=_get_value_fn(sensor),
+    )
 
 
-def _get_sensor_entities(entry_data, device_info):
+def get_sensor_configs(config: FluksoConfig) -> list[FluksoEntityConfig]:
+    """Return the configs of all numeric sensors."""
+    data_type_map = DATA_TYPE_MAP_FLM03 if config.is_flm03 else DATA_TYPE_MAP_FLM02
     entities = []
-
-    for sensor in entry_data[CONFTYPE_SENSOR].values():
-        if "enable" not in sensor or sensor["enable"] == 0:
-            continue
-
+    for sensor in _enabled_sensors(config):
         if _is_binary_sensor(sensor):
             continue
-
-        if entry_data[CONF_FLM03]:
-            dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM03)
-        else:
-            dts = _get_sensor_detail(sensor, DATA_TYPE_MAP_FLM02)
-
-        for dt in dts:
-            s = sensor.copy()
-            s["data_type"] = dt
-            config = _get_sensor_config(s, entry_data, device_info)
-            try:
-                entities.append(MQTT_SENSOR_PLATFORM_SCHEMA(config))
-            except:
-                _LOGGER.error(f'Could not convert config to to MQTT sensor config for id  {s["id"]}')
-                _LOGGER.debug(config)
-
+        data_types = _get_sensor_detail(sensor, data_type_map)
+        if not isinstance(data_types, list):
+            _LOGGER.debug("Skipping unsupported sensor %s", sensor)
+            continue
+        for data_type in data_types:
+            entities.append(
+                _build_entity_config({**sensor, "data_type": data_type}, config)
+            )
     return entities
 
 
-def _get_device_info(entry_data):
-    return {
-        CONF_CONNECTIONS: [],
-        CONF_IDENTIFIERS: {
-            (DOMAIN, entry_data[CONF_DEVICE_HASH]),
-        },
-        CONF_MANUFACTURER: "Flukso",
-        CONF_NAME: entry_data.get(CONF_DEVICE_SERIAL, entry_data[CONF_DEVICE_HASH]),
-        CONF_SW_VERSION: entry_data.get(CONF_DEVICE_FIRMWARE, "unknown"),
+def get_binary_sensor_configs(config: FluksoConfig) -> list[FluksoEntityConfig]:
+    """Return the configs of all kube binary sensors."""
+    return [
+        _build_entity_config(sensor, config)
+        for sensor in _enabled_sensors(config)
+        if _is_binary_sensor(sensor)
+    ]
+
+
+def parse_value(payload: str | bytes) -> float:
+    """Extract the value from a '[timestamp,value,unit]' Flukso payload."""
+    if isinstance(payload, bytes):
+        payload = payload.decode()
+    return float(payload.strip().strip("[]").split(",")[1])
+
+
+async def async_fetch_config(hass: HomeAssistant, device_hash: str) -> FluksoConfig:
+    """Collect the retained Flukso configs and TAP report over MQTT.
+
+    Raises TimeoutError when the sensor config does not arrive.
+    """
+    config = FluksoConfig(device_hash)
+    loop = hass.loop
+    received: dict[str, asyncio.Future[None]] = {
+        conftype: loop.create_future() for conftype in CONFTYPES
     }
-
-
-def get_entities_for_platform(platform, entry_data):
-    """Generate configuration for the given platform."""
-    entities = []
-    device_info = _get_device_info(entry_data)
-    if platform == Platform.BINARY_SENSOR:
-        entities.extend(_get_binary_sensor_entities(entry_data, device_info))
-    elif platform == Platform.SENSOR:
-        entities.extend(_get_sensor_entities(entry_data, device_info))
-    return entities
-
-
-async def async_discover_device(hass, entry):
-    """Get the Flukso configs JSON's using MQTT."""
-    config_futures = {conftype: asyncio.Future() for conftype in CONFTYPES}
-    tap_future = asyncio.Future()
-    sub_state = None
+    tap_received: asyncio.Future[None] = loop.create_future()
 
     @callback
-    def config_message_received(msg):
-        splitted_topic = msg.topic.split("/")
-
-        device = splitted_topic[2]
-        conftype = splitted_topic[4]
-
-        if conftype in config_futures:
-            _LOGGER.debug("storing config type %s for device %s", conftype, device)
-            hass.data[DOMAIN][entry.entry_id][conftype] = json.loads(msg.payload)
-            config_futures[conftype].set_result(True)
-        else:
-            _LOGGER.warning("unexpected config type: %s", conftype)
+    def config_message_received(msg: mqtt.ReceiveMessage) -> None:
+        conftype = msg.topic.split("/")[4]
+        if conftype not in received:
+            _LOGGER.debug("Ignoring config type %s for %s", conftype, device_hash)
+            return
+        try:
+            setattr(config, conftype, json.loads(msg.payload))
+        except ValueError:
+            _LOGGER.warning("Invalid %s config received from %s", conftype, device_hash)
+            return
+        if not received[conftype].done():
+            received[conftype].set_result(None)
 
     @callback
-    def tap_message_received(msg):
-        _LOGGER.debug("TAP received:")
-        _LOGGER.debug(msg.payload)
-        serial = re.findall("# serial: (.*)", msg.payload)[0]
-        firmware = re.findall("# firmware: (.*)", msg.payload)[0]
+    def tap_message_received(msg: mqtt.ReceiveMessage) -> None:
+        serial = re.search(r"# serial: (.*)", msg.payload)
+        firmware = re.search(r"# firmware: (.*)", msg.payload)
+        if serial:
+            config.serial = serial.group(1).strip()
+        if firmware:
+            config.firmware = firmware.group(1).strip()
+        if not tap_received.done():
+            tap_received.set_result(None)
 
-        hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_SERIAL] = serial
-        hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_FIRMWARE] = firmware
+    unsubscribes = [
+        await mqtt.async_subscribe(
+            hass, f"/device/{device_hash}/config/+", config_message_received
+        ),
+        await mqtt.async_subscribe(
+            hass, f"/device/{device_hash}/test/tap", tap_message_received
+        ),
+    ]
+    try:
+        await asyncio.wait([received[CONFTYPE_SENSOR]], timeout=CONFIG_TIMEOUT)
+        if not received[CONFTYPE_SENSOR].done():
+            raise TimeoutError
+        await asyncio.wait(
+            [received[CONFTYPE_KUBE], received[CONFTYPE_FLX], tap_received],
+            timeout=OPTIONAL_CONFIG_TIMEOUT,
+        )
+    finally:
+        for unsubscribe in unsubscribes:
+            unsubscribe()
 
-        tap_future.set_result(True)
-
-    sub_state = subscription.async_prepare_subscribe_topics(
-        hass,
-        sub_state,
-        {
-            f"tap_topic_{hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_HASH]}": {
-                "topic": f"/device/{hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_HASH]}/test/tap",
-                "msg_callback": tap_message_received,
-            },
-            f"config_topic_{hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_HASH]}": {
-                "topic": f"/device/{hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_HASH]}/config/+",
-                "msg_callback": config_message_received,
-            },
-        },
-    )
-
-    await subscription.async_subscribe_topics(
-        hass,
-        sub_state
-    )
-
-    done, _ = await asyncio.wait(config_futures.values(), timeout=2)
-    assert config_futures[CONFTYPE_SENSOR] in done
-    config_futures[CONFTYPE_SENSOR].result()
-    _LOGGER.debug(hass.data[DOMAIN][entry.entry_id][CONFTYPE_SENSOR])
-
-    if config_futures[CONFTYPE_KUBE] in done:
-        _LOGGER.debug(hass.data[DOMAIN][entry.entry_id][CONFTYPE_KUBE])
+    if config.is_flm03:
+        _LOGGER.debug(
+            "Found FLM03 %s with serial %s and firmware %s",
+            device_hash,
+            config.serial,
+            config.firmware,
+        )
     else:
-        _LOGGER.info("kube config not received")
-
-    if config_futures[CONFTYPE_FLX] in done:
-        _LOGGER.debug(hass.data[DOMAIN][entry.entry_id][CONFTYPE_FLX])
-    else:
-        _LOGGER.info("flx config not received")
-
-    done, _ = await asyncio.wait([tap_future], timeout=2)
-    if tap_future in done:
-        sn = hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_SERIAL]
-        version = hass.data[DOMAIN][entry.entry_id][CONF_DEVICE_FIRMWARE]
-        _LOGGER.info("We found an FLM03 with serial %s and version %s", sn, version)
-        hass.data[DOMAIN][entry.entry_id][CONF_FLM03] = True
-    else:
-        _LOGGER.info("No TAP information received, we found an FLM02")
-        hass.data[DOMAIN][entry.entry_id][CONF_FLM03] = False
-
-    subscription.async_unsubscribe_topics(hass, sub_state)
+        _LOGGER.debug("No TAP report received, %s is an FLM02", device_hash)
+    return config

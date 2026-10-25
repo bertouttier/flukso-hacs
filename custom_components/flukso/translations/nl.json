@@ -1,15 +1,27 @@
 {
   "config": {
+    "flow_title": "Flukso {device_hash}",
     "step": {
       "user": {
         "title": "Flukso",
-        "description": "Vul je Flukso hash in.",
+        "description": "Vul de hash van je Flukso-toestel in. Je vindt die in de MQTT-topics `/device/<device hash>/config/...` die je Flukso publiceert.",
         "data": {
-          "device_hash": "Hash"
+          "device_hash": "Toestel-hash"
+        },
+        "data_description": {
+          "device_hash": "De hash van 32 tekens van het toestel, niet van een sensor."
         }
+      },
+      "discovery_confirm": {
+        "description": "Wil je Flukso {device_hash} toevoegen?"
       }
     },
+    "error": {
+      "invalid_device_hash": "Een toestel-hash bestaat uit 32 hexadecimale tekens."
+    },
     "abort": {
+      "already_configured": "Deze Flukso is al geconfigureerd.",
+      "already_in_progress": "Deze Flukso wordt al geconfigureerd.",
       "invalid_discovery_info": "Ongeldige info"
     }
   }

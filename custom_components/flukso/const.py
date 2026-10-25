@@ -3,8 +3,10 @@
 DOMAIN = "flukso"
 
 CONF_DEVICE_HASH = "device_hash"
-CONF_DEVICE_SERIAL = "device_serial"
-CONF_DEVICE_FIRMWARE = "device_firmware"
-CONF_FLM03 = "is_flm03"
 
-DEFAULT_TIMEOUT = 10
+# Seconds to wait for the retained sensor config after subscribing.
+CONFIG_TIMEOUT = 10
+# Seconds to wait for the optional kube/flx configs and the FLM03 TAP report.
+OPTIONAL_CONFIG_TIMEOUT = 2
+# Seconds before a kube movement/vibration binary sensor turns off again.
+MOTION_OFF_DELAY = 10
